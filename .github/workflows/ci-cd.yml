@@ -57,3 +57,34 @@ jobs:
             printf "%s\n" "$CLEAN_RESULTS"
             echo "${DELIMITER}"
           } >> $GITHUB_OUTPUT
+
+      # Step 6: Upload simulation results and charts as artifacts
+      - name: Upload Simulation Results
+        uses: actions/upload-artifact@v4
+        with:
+          name: simulation-artifacts
+          path: |
+            $GITHUB_WORKSPACE/output/*
+          if-no-files-found: warn
+          
+      # Step 7: Display summary of simulation results
+      - name: Show Simulation Summary
+        if: success()
+        run: |
+          echo "### CloudSim Simulation Completed Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "View the detailed results in the artifacts section." >> $GITHUB_STEP_SUMMARY
+          
+          # Count charts generated
+          CHART_COUNT=$(ls -1 $GITHUB_WORKSPACE/output/*.png 2>/dev/null | wc -l)
+          if [ $CHART_COUNT -gt 0 ]; then
+            echo "* $CHART_COUNT chart(s) generated" >> $GITHUB_STEP_SUMMARY
+          else
+            echo "* No charts were generated" >> $GITHUB_STEP_SUMMARY
+          fi
+          
+          # Add result file size
+          if [ -f "$GITHUB_WORKSPACE/output/simulation_results.txt" ]; then
+            RESULT_SIZE=$(du -h "$GITHUB_WORKSPACE/output/simulation_results.txt" | cut -f1)
+            echo "* Simulation results size: $RESULT_SIZE" >> $GITHUB_STEP_SUMMARY
+          fi
