@@ -4,8 +4,6 @@ import java.io.File;
 import java.io.IOException;
 import java.util.ArrayList;
 import java.util.List;
-import java.util.Optional;
-import java.util.Random;
 
 import org.cloudsimplus.allocationpolicies.VmAllocationPolicyBestFit;
 import org.cloudsimplus.brokers.DatacenterBrokerSimple;
@@ -29,27 +27,23 @@ import org.jfree.chart.JFreeChart;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
-public class EnhancedPowerOptimization {
-    // Metric tracking
+public class CostEfficientResourceAllocation {
+    private static final int HOSTS = 8; // Number of hosts
+    private static final int INITIAL_VMS = 10; // Initial number of VMs
+    private static final int CLOUDLETS = 30; // Number of cloudlets
+
     private static List<Double> powerOverTime = new ArrayList<>();
     private static List<Double> timeStamps = new ArrayList<>();
-    private static List<Double> costOverTime = new ArrayList<>();
-    private static int slaViolations = 0;
-    private static final int HOSTS = 8;
-    private static final int INITIAL_VMS = 10;
-    private static final int CLOUDLETS = 30;
-    private static double totalEnergyCost = 0.0;
-    private static double carbonCost = 0.0;
-    private static final double RENEWABLE_RATIO = 0.3;
+    private static double totalEnergyCost = 0.0; // Total energy cost
 
-    private static CloudSimPlus simulation;
-    private static DatacenterSimple datacenter;
-    private static DatacenterBrokerSimple broker;
+    private static CloudSimPlus simulation; // Simulation object
+    private static DatacenterSimple datacenter; // Datacenter object
+    private static DatacenterBrokerSimple broker; // Broker object
 
     public static void main(String[] args) {
-        System.out.println("Starting Enhanced Power Optimization Simulation...");
+        System.out.println("Starting Cost-Efficient Resource Allocation Simulation...");
         simulation = new CloudSimPlus();
-        
+
         datacenter = createDatacenter();
         broker = new DatacenterBrokerSimple(simulation);
 
@@ -58,13 +52,12 @@ public class EnhancedPowerOptimization {
 
         simulation.addOnClockTickListener(createMonitoringListener());
         simulation.addOnClockTickListener(createAutoScalingListener());
-        simulation.addOnClockTickListener(createFailureSimulationListener());
-        
+
         simulation.start();
-        
+
         printResults();
         generateComparisonChart();
-        generateCharts();
+        generatePowerUsageChart();
     }
 
     private static DatacenterSimple createDatacenter() {
@@ -72,7 +65,7 @@ public class EnhancedPowerOptimization {
         for (int i = 0; i < HOSTS; i++) {
             List<Pe> peList = new ArrayList<>();
             for (int j = 0; j < 8; j++) {
-                peList.add(new PeSimple(8000));
+                peList.add(new PeSimple(8000)); // Each PE has 8000 MIPS
             }
 
             Host host = new HostSimple(
@@ -101,7 +94,6 @@ public class EnhancedPowerOptimization {
     }
 
     private static void createCloudlets(DatacenterBrokerSimple broker) {
-        List<Cloudlet> cloudletList = new ArrayList<>();
         for (int i = 0; i < CLOUDLETS; i++) {
             Cloudlet cloudlet = new CloudletSimple(
                 15000 + (i * 1000),
@@ -116,31 +108,20 @@ public class EnhancedPowerOptimization {
             double currentTime = eventInfo.getTime();
             if (currentTime > 0) {
                 double currentPower = datacenter.getHostList().stream()
-                    .mapToDouble(host -> {
-                        double utilization = host.getCpuPercentUtilization();
-                        if (utilization > 0.8) {
-                            slaViolations++;
-                            System.out.printf("SLA Violation: Host %d at %.1f%% CPU%n",
-                                host.getId(), utilization*100);
-                        }
-                        return host.getPowerModel().getPower(utilization);
-                    })
+                    .mapToDouble(host -> host.getPowerModel().getPower(host.getCpuPercentUtilization()))
                     .sum();
 
-                totalEnergyCost += currentPower / 3600.0 * 0.15;
-                carbonCost += currentPower / 3600.0 * 0.15 * (1 - RENEWABLE_RATIO) * 0.5;
-
+                totalEnergyCost += currentPower / 3600.0 * 0.15; // Energy cost calculation ($/kWh)
                 powerOverTime.add(currentPower);
-                costOverTime.add(currentPower * 0.15);
                 timeStamps.add(currentTime);
 
                 if (currentTime % 10 == 0) {
                     System.out.println("\n| Host | CPU% | Power(W) | VMs |");
                     System.out.println("|------|------|----------|-----|");
-                    datacenter.getHostList().forEach(host -> 
+                    datacenter.getHostList().forEach(host ->
                         System.out.printf("| %4d | %5.1f | %8.1f | %3d |%n",
                             host.getId(),
-                            host.getCpuPercentUtilization()*100,
+                            host.getCpuPercentUtilization() * 100,
                             host.getPowerModel().getPower(host.getCpuPercentUtilization()),
                             host.getVmList().size()
                         )
@@ -156,109 +137,80 @@ public class EnhancedPowerOptimization {
             if (currentTime > 0 && currentTime % 10 == 0) {
                 datacenter.getHostList().forEach(host -> {
                     double cpuUtil = host.getCpuPercentUtilization();
-                    double ramUtil = host.getRam().getPercentUtilization();
-                    double bwUtil = host.getBw().getPercentUtilization();
 
-                    if (cpuUtil > 0.6 || ramUtil > 0.7 || bwUtil > 0.6) {
+                    if (cpuUtil > 0.6) { // Scale-up condition
                         Vm newVm = new VmSimple(2000, 2)
                             .setRam(32768).setBw(10000).setSize(50000);
                         broker.submitVm(newVm);
-                        System.out.printf("\n[SCALE UP] Host %d - CPU: %.1f%%, RAM: %.1f%%, BW: %.1f%%%n",
-                            host.getId(), cpuUtil*100, ramUtil*100, bwUtil*100);
+                        System.out.printf("\n[SCALE UP] Host %d - CPU: %.1f%%%n", host.getId(), cpuUtil * 100);
+                    } else if (cpuUtil < 0.3 && !host.getVmList().isEmpty()) { // Scale-down condition
+                        broker.destroyVm(host.getVmList().get(0));
+                        System.out.printf("\n[SCALE DOWN] Host %d - CPU: %.1f%%%n", host.getId(), cpuUtil * 100);
                     }
                 });
             }
         };
     }
 
-    private static EventListener<EventInfo> createFailureSimulationListener() {
-        return eventInfo -> {
-            double currentTime = eventInfo.getTime();
-            if (currentTime == 50 || currentTime == 100 || currentTime == 150) {
-                Host failedHost = datacenter.getHostList().get(new Random().nextInt(HOSTS));
-                System.out.printf("\n[FAILURE] Host %d failed at %.1fs%n", 
-                    failedHost.getId(), currentTime);
-                migrateVms(failedHost);
-            }
-        };
-    }
+    private static void generatePowerUsageChart() {
+        XYSeries powerSeries = new XYSeries("Optimized Power Usage");
+        for (int i = 0; i < timeStamps.size(); i++) {
+            powerSeries.add(timeStamps.get(i), powerOverTime.get(i));
+        }
 
-    private static void migrateVms(Host failedHost) {
-        failedHost.getVmList().forEach(vm -> {
-            Optional<Host> targetHost = datacenter.getHostList().stream()
-                .filter(host -> host != failedHost)
-                .filter(host -> host.isSuitableForVm(vm))
-                .findFirst();
+        JFreeChart chart = ChartFactory.createXYLineChart(
+            "Optimized Power Consumption Over Time",
+            "Time (seconds)",
+            "Power (Watts)",
+            new XYSeriesCollection(powerSeries)
+        );
 
-            if (targetHost.isPresent()) {
-                targetHost.get().createVm(vm);
-                System.out.printf("VM %d migrated to Host %d%n", 
-                    vm.getId(), targetHost.get().getId());
-            } else {
-                System.out.printf("Failed to migrate VM %d%n", vm.getId());
-            }
-        });
+        saveChart(chart, "optimized_power_usage.png");
     }
 
     private static void generateComparisonChart() {
-        XYSeries baselineSeries = new XYSeries("Baseline");
+        XYSeries baselineSeries = new XYSeries("Baseline (No Optimization)");
         XYSeries optimizedSeries = new XYSeries("Optimized");
-    
-        // Ensure timeStamps.get(i) is converted to double
-        for (int i = 0; i < timeStamps.size(); i++) {
-            baselineSeries.add(timeStamps.get(i).doubleValue(), 800 + i * 2);
-            optimizedSeries.add(timeStamps.get(i).doubleValue(), powerOverTime.get(i));
-        }
-    
-        XYSeriesCollection collection = new XYSeriesCollection();
-        collection.addSeries(baselineSeries);
-        collection.addSeries(optimizedSeries);
-    
-        JFreeChart comparisonChart = ChartFactory.createXYLineChart(
-            "Optimization Impact", "Time (s)", "Power (W)", collection
-        );
-        saveChart(comparisonChart, "optimization_comparison.png");
-    }
-    
-    
 
-    private static void generateCharts() {
-        XYSeries powerSeries = new XYSeries("Power Usage (W)");
-        for (int i = 0; i < powerOverTime.size(); i++) {
-            powerSeries.add(timeStamps.get(i), powerOverTime.get(i));
+        for (int i = 0; i < timeStamps.size(); i++) {
+            double baselinePower = 800 + (i * 15); // Simulate linear growth for baseline
+            baselineSeries.add(timeStamps.get(i).doubleValue(), baselinePower);
+            optimizedSeries.add(timeStamps.get(i), powerOverTime.get(i));
         }
-        
-        XYSeriesCollection collection = new XYSeriesCollection();
-        collection.addSeries(powerSeries);
-        
+
+        XYSeriesCollection dataset = new XYSeriesCollection();
+        dataset.addSeries(baselineSeries);
+        dataset.addSeries(optimizedSeries);
+
         JFreeChart chart = ChartFactory.createXYLineChart(
-            "Power Usage Over Time", "Time (s)", "Power (W)", collection
+            "Power Consumption Comparison",
+            "Time (seconds)",
+            "Power (Watts)",
+            dataset
         );
-        saveChart(chart, "power_usage.png");
+
+        saveChart(chart, "power_comparison.png");
     }
 
     private static void saveChart(JFreeChart chart, String filename) {
         try {
-            // Save to current directory (no path needed)
             ChartUtils.saveChartAsPNG(new File(filename), chart, 800, 600);
+            System.out.println("\nGenerated chart: " + filename);
         } catch (IOException e) {
-            System.err.println("Couldn't save chart: " + e.getMessage());
+            System.err.println("Error saving chart: " + e.getMessage());
         }
     }
 
     private static void printResults() {
-        System.out.println("\n================ Final Results ================");
+        System.out.println("\n=============== Simulation Results =================");
         System.out.printf("Total Energy Cost: $%.2f%n", totalEnergyCost);
-        System.out.printf("Carbon Footprint Cost: $%.2f%n", carbonCost);
-        System.out.printf("SLA Violations: %d%n", slaViolations);
-        
-        System.out.println("\nHost Utilization:");
-        datacenter.getHostList().forEach(host -> 
-            System.out.printf("Host %2d: CPU %5.1f%% | RAM %5.1f%% | BW %5.1f%%%n",
+
+        System.out.println("\nFinal Host States:");
+        datacenter.getHostList().forEach(host ->
+            System.out.printf("Host %2d: CPU %5.1f%% | Power %5.1fW%n",
                 host.getId(),
-                host.getCpuPercentUtilization()*100,
-                host.getRam().getPercentUtilization()*100,
-                host.getBw().getPercentUtilization()*100
+                host.getCpuPercentUtilization() * 100,
+                host.getPowerModel().getPower(host.getCpuPercentUtilization())
             )
         );
     }
