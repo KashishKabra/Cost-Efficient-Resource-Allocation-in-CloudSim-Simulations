@@ -37,27 +37,23 @@ jobs:
       - name: Run Simulation and Capture Results
         id: simulation
         run: |
-          # Run simulation in headless mode to generate charts and save logs
+          # Run simulation in headless mode
           mvn exec:java -pl modules/cloudsim-examples \
             -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
             -Djava.awt.headless=true \
             > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
 
-          # Move generated charts to output directory (if any)
+          # Move generated charts
           mv *.png $GITHUB_WORKSPACE/output/ || echo "No charts generated"
 
-          # Extract final results from simulation logs
+          # Process results with unique delimiter
+          DELIMITER=$(openssl rand -hex 8)
           FINAL_RESULTS=$(grep -A 100 "================ Final Results ================" $GITHUB_WORKSPACE/output/simulation_results.txt)
+          CLEAN_RESULTS=$(echo "$FINAL_RESULTS" | sed '/Downloading from/d' | sed '/Progress/d' | sed '/Downloaded/d')
           
-          echo "results<<EOF" >> $GITHUB_OUTPUT
-          echo "$FINAL_RESULTS" >> $GITHUB_OUTPUT
-          echo "EOF"
-
-      # Step 6: Upload simulation results and charts as artifacts
-      - name: Upload Results Artifacts
-        uses: actions/upload-artifact@v4
-        with:
-          name: simulation-artifacts
-          path: |
-            $GITHUB_WORKSPACE/output/*
-          if-no-files-found: warn
+          # Write output with dynamic delimiter
+          {
+            echo "results<<${DELIMITER}"
+            printf "%s\n" "$CLEAN_RESULTS"
+            echo "${DELIMITER}"
+          } >> $GITHUB_OUTPUT
