@@ -25,7 +25,7 @@ jobs:
       - name: Create output directory
         run: |
           mkdir -p $GITHUB_WORKSPACE/output
-          echo "Output directory created"
+          echo "Output directory created at $GITHUB_WORKSPACE/output"
           
       # Step 4: Build the project using Maven
       - name: Build and Install All Modules
@@ -37,14 +37,20 @@ jobs:
       - name: Run Simulation and Capture Results
         id: simulation
         run: |
+          # Verify output directory exists
+          echo "Pre-simulation directory contents:"
+          ls -la $GITHUB_WORKSPACE
+          
           # Run simulation in headless mode
           mvn exec:java -pl modules/cloudsim-examples \
             -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
             -Djava.awt.headless=true \
+            -Dexec.args="output" \
             > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
           
-          # Find all PNG files in the repository and copy them to output
-          find $GITHUB_WORKSPACE -name "*.png" -type f -exec cp {} $GITHUB_WORKSPACE/output/ \;
+          # Debug: Show generated files
+          echo "Post-simulation directory contents:"
+          ls -la $GITHUB_WORKSPACE/output
           
           # Process results with unique delimiter
           DELIMITER=$(openssl rand -hex 8)
@@ -64,7 +70,7 @@ jobs:
         with:
           name: simulation-artifacts
           path: $GITHUB_WORKSPACE/output
-          if-no-files-found: warn
+          if-no-files-found: error
           
       # Step 7: Display summary of simulation results
       - name: Show Simulation Summary
@@ -84,6 +90,8 @@ jobs:
             done
           else
             echo "* No charts were generated" >> $GITHUB_STEP_SUMMARY
+            echo "Debug: Output directory contents:" >> $GITHUB_STEP_SUMMARY
+            ls -la $GITHUB_WORKSPACE/output >> $GITHUB_STEP_SUMMARY
           fi
           
           # Add result file size
@@ -91,3 +99,22 @@ jobs:
             RESULT_SIZE=$(du -h "$GITHUB_WORKSPACE/output/simulation_results.txt" | cut -f1)
             echo "* Simulation results size: $RESULT_SIZE" >> $GITHUB_STEP_SUMMARY
           fi
+          
+          # Add any warnings or errors
+          if grep -q "ERROR" "$GITHUB_WORKSPACE/output/simulation_results.txt"; then
+            echo "### ❌ Errors detected during simulation:" >> $GITHUB_STEP_SUMMARY
+            grep "ERROR" "$GITHUB_WORKSPACE/output/simulation_results.txt" >> $GITHUB_STEP_SUMMARY
+          fi
+
+      # Step 8: Debug information
+      - name: Debug Information
+        if: always()
+        run: |
+          echo "### Debug Information"
+          echo "Working directory: $(pwd)"
+          echo "Output directory contents:"
+          ls -la $GITHUB_WORKSPACE/output
+          echo "Environment variables:"
+          printenv | grep GITHUB
+          echo "Simulation output (last 50 lines):"
+          tail -n 50 $GITHUB_WORKSPACE/output/simulation_results.txt
