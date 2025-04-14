@@ -33,13 +33,12 @@ jobs:
           mvn clean install -DskipTests
           echo "Build completed successfully"
 
-
       # Step 5: Run the simulation and capture results
       - name: Run Simulation and Capture Results
         id: simulation
         run: |
           # Run simulation in headless mode to generate charts and save logs
-          xvfb-run -a mvn exec:java -pl modules/cloudsim-examples \
+          mvn exec:java -pl modules/cloudsim-examples \
             -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
             -Djava.awt.headless=true \
             > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
@@ -62,4 +61,3 @@ jobs:
           path: |
             $GITHUB_WORKSPACE/output/*
           if-no-files-found: warn
-
