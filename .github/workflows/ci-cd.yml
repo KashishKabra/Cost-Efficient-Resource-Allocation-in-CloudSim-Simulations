@@ -19,41 +19,37 @@ jobs:
         java-version: '21'
         distribution: 'temurin'
     
-    - name: Clean install and build
-      run: |
-        mvn clean install -DskipTests
-        echo "Build completed successfully"
+    - name: Clean install
+      run: mvn clean install -DskipTests
     
     - name: Prepare output directory
       run: mkdir -p output
     
-    - name: Run simulation and capture outputs
+    - name: Run simulation and capture complete output
       run: |
-        # Run simulation (will generate charts in workspace root)
+        # Run simulation and pipe ALL output to file
         mvn exec:java -pl modules/cloudsim-examples \
           -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
-          -Djava.awt.headless=true
+          -Djava.awt.headless=true > output/results.txt 2>&1
         
-        # Move all generated files to output directory
+        # Move any generated charts to output directory
         mv *.png output/ 2>/dev/null || echo "No charts generated"
         
-        # Capture console output
-        echo "=== Simulation Summary ===" > output/results.txt
+        # Add execution metadata
+        echo -e "\n\n=== Simulation Metadata ===" >> output/results.txt
         echo "Timestamp: $(date)" >> output/results.txt
-        echo "Total Energy Cost: \$$(grep 'Total Energy Cost' modules/cloudsim-examples/target/surefire-reports/org.cloudbus.cloudsim.examples.EnhancedPowerOptimization.txt | cut -d':' -f2)" >> output/results.txt
-        echo "Carbon Footprint: \$$(grep 'Carbon Footprint Cost' modules/cloudsim-examples/target/surefire-reports/org.cloudbus.cloudsim.examples.EnhancedPowerOptimization.txt | cut -d':' -f2)" >> output/results.txt
-        echo "SLA Violations: $(grep 'SLA Violations' modules/cloudsim-examples/target/surefire-reports/org.cloudbus.cloudsim.examples.EnhancedPowerOptimization.txt | cut -d':' -f2)" >> output/results.txt
+        echo "Java Version: $(java -version 2>&1 | head -1)" >> output/results.txt
     
     - name: Verify outputs
       run: |
-        echo "Generated files in output directory:"
+        echo "Generated files:"
         ls -l output/
-        echo "Simulation results:"
-        cat output/results.txt
+        echo -e "\nLast 20 lines of output:"
+        tail -20 output/results.txt
     
-    - name: Upload artifacts
+    - name: Upload complete results
       uses: actions/upload-artifact@v4
       with:
-        name: simulation-artifacts
+        name: simulation-complete-results
         path: output/
         if-no-files-found: error
