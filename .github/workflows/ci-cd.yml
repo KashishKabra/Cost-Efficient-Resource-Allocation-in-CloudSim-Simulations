@@ -26,13 +26,13 @@ jobs:
         run: |
           mkdir -p $GITHUB_WORKSPACE/output
           echo "Output directory created"
-
+          
       # Step 4: Build the project using Maven
       - name: Build and Install All Modules
         run: |
           mvn clean install -DskipTests
           echo "Build completed successfully"
-
+          
       # Step 5: Run the simulation and capture results
       - name: Run Simulation and Capture Results
         id: simulation
@@ -42,10 +42,10 @@ jobs:
             -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
             -Djava.awt.headless=true \
             > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
-
-          # Move generated charts
-          mv *.png $GITHUB_WORKSPACE/output/ || echo "No charts generated"
-
+          
+          # Find all PNG files in the repository and copy them to output
+          find $GITHUB_WORKSPACE -name "*.png" -type f -exec cp {} $GITHUB_WORKSPACE/output/ \;
+          
           # Process results with unique delimiter
           DELIMITER=$(openssl rand -hex 8)
           FINAL_RESULTS=$(grep -A 100 "================ Final Results ================" $GITHUB_WORKSPACE/output/simulation_results.txt)
@@ -57,14 +57,13 @@ jobs:
             printf "%s\n" "$CLEAN_RESULTS"
             echo "${DELIMITER}"
           } >> $GITHUB_OUTPUT
-
+      
       # Step 6: Upload simulation results and charts as artifacts
       - name: Upload Simulation Results
         uses: actions/upload-artifact@v4
         with:
           name: simulation-artifacts
-          path: |
-            $GITHUB_WORKSPACE/output/*
+          path: $GITHUB_WORKSPACE/output
           if-no-files-found: warn
           
       # Step 7: Display summary of simulation results
@@ -79,6 +78,10 @@ jobs:
           CHART_COUNT=$(ls -1 $GITHUB_WORKSPACE/output/*.png 2>/dev/null | wc -l)
           if [ $CHART_COUNT -gt 0 ]; then
             echo "* $CHART_COUNT chart(s) generated" >> $GITHUB_STEP_SUMMARY
+            echo "* Charts:" >> $GITHUB_STEP_SUMMARY
+            ls -1 $GITHUB_WORKSPACE/output/*.png | while read file; do
+              echo "  - $(basename $file)" >> $GITHUB_STEP_SUMMARY
+            done
           else
             echo "* No charts were generated" >> $GITHUB_STEP_SUMMARY
           fi
