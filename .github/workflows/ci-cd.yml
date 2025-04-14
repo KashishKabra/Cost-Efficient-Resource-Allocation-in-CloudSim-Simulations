@@ -7,48 +7,53 @@ on:
     branches: [ main ]
 
 jobs:
-  build-and-simulate:
+  simulate:
     runs-on: ubuntu-latest
+    
     steps:
-      # Step 1: Checkout the code
-      - name: Checkout code
-        uses: actions/checkout@v3
-
-      # Step 2: Set up Java JDK 21
-      - name: Set up JDK 21
-        uses: actions/setup-java@v3
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      # Step 3: Create output directory for storing results and charts
-      - name: Create output directory
-        run: |
-          mkdir -p $GITHUB_WORKSPACE/output
-          echo "Output directory created at $GITHUB_WORKSPACE/output"
-          
-      # Step 4: Build the project using Maven
-      - name: Build and Install All Modules
-        run: |
-          mvn clean install -DskipTests
-          echo "Build completed successfully"
-          
-      # Step 5: Run the simulation and capture results
-      - name: Run Simulation
-        run: |
-          # Create output folder right where the code runs
-          mkdir -p simulation-output
-          
-          # Run simulation and save everything to the folder
-          mvn exec:java -pl modules/cloudsim-examples \
-            -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
-            -Djava.awt.headless=true > simulation-output/results.txt
-          
-          # Simple check to show what was created
-          ls -l simulation-output
-      
-      - name: Upload Results
-        uses: actions/upload-artifact@v4
-        with:
-          name: simulation-results
-          path: simulation-output
+    - uses: actions/checkout@v3
+    
+    - name: Set up Java 21
+      uses: actions/setup-java@v3
+      with:
+        java-version: '21'
+        distribution: 'temurin'
+    
+    - name: Clean install and build
+      run: |
+        mvn clean install -DskipTests
+        echo "Build completed successfully"
+    
+    - name: Prepare output directory
+      run: mkdir -p output
+    
+    - name: Run simulation and capture outputs
+      run: |
+        # Run simulation (will generate charts in workspace root)
+        mvn exec:java -pl modules/cloudsim-examples \
+          -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
+          -Djava.awt.headless=true
+        
+        # Move all generated files to output directory
+        mv *.png output/ 2>/dev/null || echo "No charts generated"
+        
+        # Capture console output
+        echo "=== Simulation Summary ===" > output/results.txt
+        echo "Timestamp: $(date)" >> output/results.txt
+        echo "Total Energy Cost: \$$(grep 'Total Energy Cost' modules/cloudsim-examples/target/surefire-reports/org.cloudbus.cloudsim.examples.EnhancedPowerOptimization.txt | cut -d':' -f2)" >> output/results.txt
+        echo "Carbon Footprint: \$$(grep 'Carbon Footprint Cost' modules/cloudsim-examples/target/surefire-reports/org.cloudbus.cloudsim.examples.EnhancedPowerOptimization.txt | cut -d':' -f2)" >> output/results.txt
+        echo "SLA Violations: $(grep 'SLA Violations' modules/cloudsim-examples/target/surefire-reports/org.cloudbus.cloudsim.examples.EnhancedPowerOptimization.txt | cut -d':' -f2)" >> output/results.txt
+    
+    - name: Verify outputs
+      run: |
+        echo "Generated files in output directory:"
+        ls -l output/
+        echo "Simulation results:"
+        cat output/results.txt
+    
+    - name: Upload artifacts
+      uses: actions/upload-artifact@v4
+      with:
+        name: simulation-artifacts
+        path: output/
+        if-no-files-found: error
