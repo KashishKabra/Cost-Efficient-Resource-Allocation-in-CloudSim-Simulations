@@ -239,13 +239,10 @@ public class EnhancedPowerOptimization {
 
     private static void saveChart(JFreeChart chart, String filename) {
         try {
-            // Create output directory if it doesn't exist
-            new File("output").mkdirs();
-            // Save to output directory
-            ChartUtils.saveChartAsPNG(new File("output/" + filename), chart, 800, 600);
-            System.out.println("Saved chart: " + filename);
+            // Save to current directory (no path needed)
+            ChartUtils.saveChartAsPNG(new File(filename), chart, 800, 600);
         } catch (IOException e) {
-            System.err.println("Chart save error: " + e.getMessage());
+            System.err.println("Couldn't save chart: " + e.getMessage());
         }
     }
 

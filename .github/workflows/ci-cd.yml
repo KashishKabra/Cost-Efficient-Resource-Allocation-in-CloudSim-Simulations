@@ -34,87 +34,21 @@ jobs:
           echo "Build completed successfully"
           
       # Step 5: Run the simulation and capture results
-      - name: Run Simulation and Capture Results
-        id: simulation
+      - name: Run Simulation
         run: |
-          # Verify output directory exists
-          echo "Pre-simulation directory contents:"
-          ls -la $GITHUB_WORKSPACE
+          # Create output folder right where the code runs
+          mkdir -p simulation-output
           
-          # Run simulation in headless mode
+          # Run simulation and save everything to the folder
           mvn exec:java -pl modules/cloudsim-examples \
             -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization \
-            -Djava.awt.headless=true \
-            -Dexec.args="output" \
-            > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
+            -Djava.awt.headless=true > simulation-output/results.txt
           
-          # Debug: Show generated files
-          echo "Post-simulation directory contents:"
-          ls -la $GITHUB_WORKSPACE/output
-          
-          # Process results with unique delimiter
-          DELIMITER=$(openssl rand -hex 8)
-          FINAL_RESULTS=$(grep -A 100 "================ Final Results ================" $GITHUB_WORKSPACE/output/simulation_results.txt)
-          CLEAN_RESULTS=$(echo "$FINAL_RESULTS" | sed '/Downloading from/d' | sed '/Progress/d' | sed '/Downloaded/d')
-          
-          # Write output with dynamic delimiter
-          {
-            echo "results<<${DELIMITER}"
-            printf "%s\n" "$CLEAN_RESULTS"
-            echo "${DELIMITER}"
-          } >> $GITHUB_OUTPUT
+          # Simple check to show what was created
+          ls -l simulation-output
       
-      # Step 6: Upload simulation results and charts as artifacts
-      - name: Upload Simulation Results
+      - name: Upload Results
         uses: actions/upload-artifact@v4
         with:
-          name: simulation-artifacts
-          path: $GITHUB_WORKSPACE/output
-          if-no-files-found: error
-          
-      # Step 7: Display summary of simulation results
-      - name: Show Simulation Summary
-        if: success()
-        run: |
-          echo "### CloudSim Simulation Completed Successfully! 🚀" >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          echo "View the detailed results in the artifacts section." >> $GITHUB_STEP_SUMMARY
-          
-          # Count charts generated
-          CHART_COUNT=$(ls -1 $GITHUB_WORKSPACE/output/*.png 2>/dev/null | wc -l)
-          if [ $CHART_COUNT -gt 0 ]; then
-            echo "* $CHART_COUNT chart(s) generated" >> $GITHUB_STEP_SUMMARY
-            echo "* Charts:" >> $GITHUB_STEP_SUMMARY
-            ls -1 $GITHUB_WORKSPACE/output/*.png | while read file; do
-              echo "  - $(basename $file)" >> $GITHUB_STEP_SUMMARY
-            done
-          else
-            echo "* No charts were generated" >> $GITHUB_STEP_SUMMARY
-            echo "Debug: Output directory contents:" >> $GITHUB_STEP_SUMMARY
-            ls -la $GITHUB_WORKSPACE/output >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Add result file size
-          if [ -f "$GITHUB_WORKSPACE/output/simulation_results.txt" ]; then
-            RESULT_SIZE=$(du -h "$GITHUB_WORKSPACE/output/simulation_results.txt" | cut -f1)
-            echo "* Simulation results size: $RESULT_SIZE" >> $GITHUB_STEP_SUMMARY
-          fi
-          
-          # Add any warnings or errors
-          if grep -q "ERROR" "$GITHUB_WORKSPACE/output/simulation_results.txt"; then
-            echo "### ❌ Errors detected during simulation:" >> $GITHUB_STEP_SUMMARY
-            grep "ERROR" "$GITHUB_WORKSPACE/output/simulation_results.txt" >> $GITHUB_STEP_SUMMARY
-          fi
-
-      # Step 8: Debug information
-      - name: Debug Information
-        if: always()
-        run: |
-          echo "### Debug Information"
-          echo "Working directory: $(pwd)"
-          echo "Output directory contents:"
-          ls -la $GITHUB_WORKSPACE/output
-          echo "Environment variables:"
-          printenv | grep GITHUB
-          echo "Simulation output (last 50 lines):"
-          tail -n 50 $GITHUB_WORKSPACE/output/simulation_results.txt
+          name: simulation-results
+          path: simulation-output
