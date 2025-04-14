@@ -32,8 +32,8 @@ jobs:
       - name: Run Simulation and Capture Results
         id: simulation
         run: |
-          # Run simulation and save output
-          mvn exec:java -pl modules/cloudsim-examples -Dexec.mainClass=org.cloudbus.cloudsim.examples.CloudSimPlusExample > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
+          # Run simulation using EnhancedPowerOptimization class and save output
+          mvn exec:java -pl modules/cloudsim-examples -Dexec.mainClass=org.cloudbus.cloudsim.examples.EnhancedPowerOptimization > $GITHUB_WORKSPACE/output/simulation_results.txt 2>&1
           
           # Check if simulation succeeded
           if [ $? -ne 0 ]; then
@@ -49,7 +49,14 @@ jobs:
           COMBINED_RESULTS="$FINAL_RESULTS\n\n$POWER_RESULTS"
           CLEAN_RESULTS=$(echo "$COMBINED_RESULTS" | sed '/Downloading from/d' | sed '/Progress/d' | sed '/Downloaded/d')
           
-          # Output for Slack
+          # Output for Slack or other integrations
           echo "results<<EOF" >> $GITHUB_OUTPUT
           echo "$CLEAN_RESULTS" >> $GITHUB_OUTPUT
           echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Upload Simulation Results
+        uses: actions/upload-artifact@v3
+        with:
+          name: simulation-results
+          path: $GITHUB_WORKSPACE/output/simulation_results.txt
+
