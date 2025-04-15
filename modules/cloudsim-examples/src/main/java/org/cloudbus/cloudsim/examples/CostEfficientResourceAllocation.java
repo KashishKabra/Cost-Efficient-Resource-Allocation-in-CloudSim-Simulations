@@ -173,7 +173,7 @@ public class CostEfficientResourceAllocation {
         XYSeries optimizedSeries = new XYSeries("Optimized");
 
         for (int i = 0; i < timeStamps.size(); i++) {
-            double baselinePower = 800 + (i * 15); // Simulate linear growth for baseline
+            double baselinePower = 800 + (i * 2); // Simulate linear growth for baseline
             baselineSeries.add(timeStamps.get(i).doubleValue(), baselinePower);
             optimizedSeries.add(timeStamps.get(i), powerOverTime.get(i));
         }
