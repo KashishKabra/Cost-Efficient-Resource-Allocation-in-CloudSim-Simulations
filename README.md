@@ -1,26 +1,83 @@
-# Enhanced Power Optimization in CloudSim Simulations
+# Cost-Efficient-Resource-Allocation-in-CloudSim-Simulations
 
-## Overview
-This project focuses on simulating and optimizing power consumption in cloud data centers using the CloudSim Plus framework. It incorporates advanced features such as power monitoring, SLA violation tracking, auto-scaling, and failure simulation to evaluate energy efficiency and cost-effectiveness in a cloud computing environment.
+## 🧩 Overview
+This project simulates an energy-efficient virtual machine (VM) allocation strategy in cloud data centers using **CloudSim Plus**. It compares a **static VM allocation approach** with an **optimized dynamic scaling strategy**, showing substantial power and cost savings.
 
-## Key Features
-- **Power Optimization**: Tracks power usage over time and calculates energy costs.
-- **SLA Violation Monitoring**: Detects SLA violations based on CPU utilization thresholds.
-- **Auto-Scaling**: Dynamically adjusts virtual machines (VMs) based on resource utilization.
-- **Failure Simulation**: Simulates host failures and migrates VMs to maintain service continuity.
-- **Visualization**: Generates charts comparing baseline and optimized power usage.
+---
 
-## Simulation Details
-The simulation includes:
-- 8 hosts with 1TB RAM, 400Gbps bandwidth, and 200TB storage each.
-- 10 initial VMs with dynamic scaling based on resource usage.
-- 30 cloudlets representing user tasks with varying computational requirements.
-- Renewable energy ratio of 30% factored into carbon cost calculations.
+## 🚀 Key Features
 
-## Results
-The simulation outputs:
-1. Total energy cost and carbon footprint cost.
-2. SLA violations during the simulation.
-3. Host utilization metrics (CPU, RAM, Bandwidth).
-4. Comparison charts for baseline vs. optimized power usage.
- 
+- **Heterogeneous Environment**  
+  Simulates 8 hosts with varied configurations:
+  - CPU cores: 4 or 8 PEs
+  - RAM: mixed sizes for realism
+
+- **Dynamic VM Scaling**  
+  Implements intelligent scaling based on CPU utilization:
+  - Scale up when utilization > 70%
+  - Scale down when utilization < 20%
+  - 30-second cooldown between actions
+
+- **Power Monitoring**  
+  Real-time power tracking and energy cost calculation  
+  💡 Rate: `$0.15/kWh`
+
+- **Visualization**  
+  Auto-generates charts showing power consumption trends  
+  - Comparison between static and dynamic strategies
+
+- **CI/CD Integration**  
+  Includes a **GitHub Actions** pipeline for automated simulations
+
+---
+
+## 🔧 Implementation Highlights
+
+- `createHeterogeneousVms()`:  
+  Generates 10 VMs with varied specs:
+  - CPU: 2000–2900 MIPS
+  - Cores: Alternates between 1 and 2
+  - RAM: Alternates between 32GB and 64GB
+  - Bandwidth: 10,000  
+  - Storage: 50,000
+
+- Cloudlets:  
+  30 tasks submitted with progressively increasing workloads
+
+- Allocation Strategies:
+  - **Baseline**: Static Best-Fit (one-time placement)
+  - **Optimized**: Dynamic reallocation based on host utilization
+
+---
+
+## 📊 Results
+
+- ⚡ Power consumption reduced from ~1150W to ~600W
+- 💰 ~44.4% energy cost savings
+- ✅ Maintains workload performance with better efficiency
+
+---
+
+## 🛠️ Technologies Used
+
+- [CloudSim Plus](https://github.com/manoelcampos/cloudsim-plus) – Cloud simulation
+- Java 21 – Language and runtime
+- JFreeChart – Visualization library
+- GitHub Actions – CI/CD automation
+
+---
+
+## 📂 Structure
+
+```bash
+.
+├── src/
+│   └── main/
+│       └── java/
+│           └── ... (Simulation logic)
+├── charts/
+│   └── power_consumption_comparison.png
+├── .github/
+│   └── workflows/
+│       └── simulate.yml
+└── README.md
