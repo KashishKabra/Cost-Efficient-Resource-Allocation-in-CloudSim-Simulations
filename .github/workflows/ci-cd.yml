@@ -29,7 +29,7 @@ jobs:
       run: |
         # Run simulation and pipe ALL output to file
         mvn exec:java -pl modules/cloudsim-examples \
-          -Dexec.mainClass=org.cloudbus.cloudsim.examples.CostEfficientResourceAllocation \
+          -Dexec.mainClass=org.cloudbus.cloudsim.examples.ImprovedCostEfficientAllocation \
           -Djava.awt.headless=true > output/results.txt 2>&1
         
         # Move any generated charts to output directory
