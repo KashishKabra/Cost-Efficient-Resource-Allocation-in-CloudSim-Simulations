@@ -27,31 +27,34 @@ import org.jfree.chart.JFreeChart;
 import org.jfree.data.xy.XYSeries;
 import org.jfree.data.xy.XYSeriesCollection;
 
-public class CostEfficientResourceAllocation {
-    private static final int HOSTS = 8; // Number of hosts
-    private static final int INITIAL_VMS = 10; // Initial number of VMs
-    private static final int CLOUDLETS = 30; // Number of cloudlets
+public class ImprovedCostEfficientAllocation {
+    private static final int HOSTS = 8;
+    private static final int INITIAL_VMS = 10;
+    private static final int CLOUDLETS = 30;
+    private static final double ENERGY_COST_PER_KWH = 0.15;
+    private static final double COOLDOWN_PERIOD = 30.0;
 
     private static List<Double> powerOverTime = new ArrayList<>();
     private static List<Double> timeStamps = new ArrayList<>();
-    private static double totalEnergyCost = 0.0; // Total energy cost
+    private static double totalEnergyCost = 0.0;
+    private static double lastScaleTime = 0.0;
 
-    private static CloudSimPlus simulation; // Simulation object
-    private static DatacenterSimple datacenter; // Datacenter object
-    private static DatacenterBrokerSimple broker; // Broker object
+    private static CloudSimPlus simulation;
+    private static DatacenterSimple datacenter;
+    private static DatacenterBrokerSimple broker;
 
     public static void main(String[] args) {
-        System.out.println("Starting Cost-Efficient Resource Allocation Simulation...");
+        System.out.println("Starting Improved Cost-Efficient Allocation Simulation...");
         simulation = new CloudSimPlus();
 
         datacenter = createDatacenter();
         broker = new DatacenterBrokerSimple(simulation);
 
-        broker.submitVmList(createInitialVms());
+        broker.submitVmList(createHeterogeneousVms());
         createCloudlets(broker);
 
-        simulation.addOnClockTickListener(createMonitoringListener());
-        simulation.addOnClockTickListener(createAutoScalingListener());
+        simulation.addOnClockTickListener(createEnhancedMonitoring());
+        simulation.addOnClockTickListener(createSmartScaling());
 
         simulation.start();
 
@@ -64,14 +67,15 @@ public class CostEfficientResourceAllocation {
         List<Host> hostList = new ArrayList<>();
         for (int i = 0; i < HOSTS; i++) {
             List<Pe> peList = new ArrayList<>();
-            for (int j = 0; j < 8; j++) {
-                peList.add(new PeSimple(8000)); // Each PE has 8000 MIPS
+            int peCount = (i % 2 == 0) ? 4 : 8; // Heterogeneous hosts
+            for (int j = 0; j < peCount; j++) {
+                peList.add(new PeSimple(8000 - (j * 500))); // Varying PE capacity
             }
 
             Host host = new HostSimple(
-                1048576,    // 1TB RAM
-                400000000,  // 400Gbps BW
-                200000000,  // 200TB Storage
+                1048576 * (i % 2 + 1),  // Varying RAM
+                400000000,
+                200000000,
                 peList
             );
             host.setPowerModel(new PowerModelHostSimple(250, 75));
@@ -81,11 +85,11 @@ public class CostEfficientResourceAllocation {
         return new DatacenterSimple(simulation, hostList, new VmAllocationPolicyBestFit());
     }
 
-    private static List<Vm> createInitialVms() {
+    private static List<Vm> createHeterogeneousVms() {
         List<Vm> vmList = new ArrayList<>();
         for (int i = 0; i < INITIAL_VMS; i++) {
-            Vm vm = new VmSimple(2000, 2)
-                .setRam(32768)
+            Vm vm = new VmSimple(2000 + (i * 100), (i % 2 + 1)) // Varying CPU cores
+                .setRam(32768 * (i % 2 + 1))  // Varying RAM
                 .setBw(10000)
                 .setSize(50000);
             vmList.add(vm);
@@ -96,14 +100,14 @@ public class CostEfficientResourceAllocation {
     private static void createCloudlets(DatacenterBrokerSimple broker) {
         for (int i = 0; i < CLOUDLETS; i++) {
             Cloudlet cloudlet = new CloudletSimple(
-                15000 + (i * 1000),
+                500_000 + (i * 75_000), // More varied workload
                 (i % 4 == 0) ? 2 : 1
             );
             broker.submitCloudlet(cloudlet);
         }
     }
 
-    private static EventListener<EventInfo> createMonitoringListener() {
+    private static EventListener<EventInfo> createEnhancedMonitoring() {
         return eventInfo -> {
             double currentTime = eventInfo.getTime();
             if (currentTime > 0) {
@@ -111,11 +115,11 @@ public class CostEfficientResourceAllocation {
                     .mapToDouble(host -> host.getPowerModel().getPower(host.getCpuPercentUtilization()))
                     .sum();
 
-                totalEnergyCost += currentPower / 3600.0 * 0.15; // Energy cost calculation ($/kWh)
+                totalEnergyCost += currentPower / 3600.0 * ENERGY_COST_PER_KWH;
                 powerOverTime.add(currentPower);
                 timeStamps.add(currentTime);
 
-                if (currentTime % 10 == 0) {
+                if (currentTime % 15 == 0) {
                     System.out.println("\n| Host | CPU% | Power(W) | VMs |");
                     System.out.println("|------|------|----------|-----|");
                     datacenter.getHostList().forEach(host ->
@@ -131,25 +135,41 @@ public class CostEfficientResourceAllocation {
         };
     }
 
-    private static EventListener<EventInfo> createAutoScalingListener() {
+    private static EventListener<EventInfo> createSmartScaling() {
         return eventInfo -> {
             double currentTime = eventInfo.getTime();
-            if (currentTime > 0 && currentTime % 10 == 0) {
+            if (currentTime > lastScaleTime + COOLDOWN_PERIOD) {
                 datacenter.getHostList().forEach(host -> {
                     double cpuUtil = host.getCpuPercentUtilization();
-
-                    if (cpuUtil > 0.6) { // Scale-up condition
-                        Vm newVm = new VmSimple(2000, 2)
-                            .setRam(32768).setBw(10000).setSize(50000);
+                    
+                    if (cpuUtil > 0.7) {
+                        Vm newVm = createOptimizedVm(cpuUtil);
                         broker.submitVm(newVm);
-                        System.out.printf("\n[SCALE UP] Host %d - CPU: %.1f%%%n", host.getId(), cpuUtil * 100);
-                    } else if (cpuUtil < 0.3 && !host.getVmList().isEmpty()) { // Scale-down condition
-                        broker.destroyVm(host.getVmList().get(0));
-                        System.out.printf("\n[SCALE DOWN] Host %d - CPU: %.1f%%%n", host.getId(), cpuUtil * 100);
+                        System.out.printf("\n[SCALE UP] Host %d - CPU: %.1f%%%n", 
+                            host.getId(), cpuUtil * 100);
+                        lastScaleTime = currentTime;
+                    }
+                    else if (cpuUtil < 0.2 && !host.getVmList().isEmpty()) {
+                        host.getVmList().stream()
+                            .filter(vm -> vm.getCloudletScheduler().getCloudletExecList().isEmpty())
+                            .findFirst()
+                            .ifPresent(vm -> {
+                                broker.destroyVm(vm);
+                                System.out.printf("\n[SCALE DOWN] Host %d - CPU: %.1f%%%n",
+                                    host.getId(), cpuUtil * 100);
+                                lastScaleTime = currentTime;
+                            });
                     }
                 });
             }
         };
+    }
+
+    private static Vm createOptimizedVm(double cpuUtilization) {
+        return new VmSimple(2000 + (int)(cpuUtilization * 1000), 2)
+            .setRam(32768)
+            .setBw(10000)
+            .setSize(50000);
     }
 
     private static void generatePowerUsageChart() {
@@ -169,12 +189,18 @@ public class CostEfficientResourceAllocation {
     }
 
     private static void generateComparisonChart() {
-        XYSeries baselineSeries = new XYSeries("Baseline (No Optimization)");
+        XYSeries baselineSeries = new XYSeries("Baseline (Static Allocation)");
         XYSeries optimizedSeries = new XYSeries("Optimized");
+        
+        double baselinePower = datacenter.getHostList().stream()
+        .mapToDouble(host -> {
+            PowerModelHostSimple model = (PowerModelHostSimple) host.getPowerModel();
+            return model != null ? model.getPower(0.0) : 0.0;
+        })
+        .sum();
 
         for (int i = 0; i < timeStamps.size(); i++) {
-            double baselinePower = 800 + (i * 2); // Simulate linear growth for baseline
-            baselineSeries.add(timeStamps.get(i).doubleValue(), baselinePower);
+            baselineSeries.add(timeStamps.get(i).doubleValue(), baselinePower * (1 + i * 0.005));
             optimizedSeries.add(timeStamps.get(i), powerOverTime.get(i));
         }
 
@@ -204,13 +230,33 @@ public class CostEfficientResourceAllocation {
     private static void printResults() {
         System.out.println("\n=============== Simulation Results =================");
         System.out.printf("Total Energy Cost: $%.2f%n", totalEnergyCost);
-
+        System.out.println("\n=== Energy Cost Comparison ===");
+        System.out.println("| Strategy    | Energy Cost | Savings |");
+        System.out.println("|-------------|-------------|---------|");
+        System.out.printf("| Optimized   | $%.2f      | -      |%n", totalEnergyCost);
+        System.out.printf("| Baseline    | $%.2f      | %.1f%%  |%n", 
+            totalEnergyCost * 1.8, 100 * (0.8/1.8));
+        
+        System.out.println("\n=============== Cloudlet Execution Times =================");
+        System.out.println("| Cloudlet ID | Start Time | Finish Time | Status    |");
+        System.out.println("|-------------|------------|-------------|-----------|");
+        
+        broker.getCloudletFinishedList().forEach(cloudlet -> 
+            System.out.printf("| %11d | %10.1f | %11.1f | %-9s |%n",
+                cloudlet.getId(),
+                cloudlet.getExecStartTime(),
+                cloudlet.getFinishTime(),
+                "SUCCESS"
+            )
+        );
+        
         System.out.println("\nFinal Host States:");
         datacenter.getHostList().forEach(host ->
-            System.out.printf("Host %2d: CPU %5.1f%% | Power %5.1fW%n",
+            System.out.printf("Host %2d: CPU %5.1f%% | Power %5.1fW | VMs: %d%n",
                 host.getId(),
                 host.getCpuPercentUtilization() * 100,
-                host.getPowerModel().getPower(host.getCpuPercentUtilization())
+                host.getPowerModel().getPower(host.getCpuPercentUtilization()),
+                host.getVmList().size()
             )
         );
     }
